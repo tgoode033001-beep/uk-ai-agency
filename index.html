@@ -40,4 +40,604 @@ input.field.err{border-color:#dc2626;margin-bottom:4px}
 .err-msg.show{display:block}
 .hp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;opacity:0}
 .inputs{margin:18px 0 0;padding-top:16px;border-top:1px solid #f3f4f6}
-.cta{width:100%;background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:15px;font-size:16px;font-weight:700;margi
+.cta{width:100%;background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:15px;font-size:16px;font-weight:700;margin-top:6px;transition:background .15s}
+.cta:hover{background:#1e40af}
+.consent{font-size:12px;color:#6b7280;margin:10px 0 0;text-align:center}
+.result-box{margin-top:18px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:12px;padding:18px;text-align:center;display:none}
+.result-box.show{display:block}
+.est-label{font-size:13px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px}
+.est-price{font-size:34px;font-weight:800;color:#1e3a8a;margin:4px 0}
+.est-sub{font-size:13px;color:#475569;margin:0}
+.send-status{font-size:13px;font-weight:600;margin:10px 0 0}
+.send-status:empty{display:none}
+.send-status.ok{color:#047857}
+.send-status.wait{color:#475569}
+.send-status.fail{color:#b91c1c}
+.send-status button{margin-left:6px;border:1px solid #fca5a5;background:#fff;color:#b91c1c;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700}
+.demo-note{margin:12px 0 0;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;text-align:left}
+#dr-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;z-index:20}
+#dr{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.18);padding:20px;overflow-y:auto;display:none;z-index:21}
+#dr .top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:14px}
+#dr h3{margin:0;font-size:18px}
+#dr label{display:block;font-size:13px;font-weight:700;margin:12px 0 4px;color:#374151}
+#dr input{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px}
+#dr .row{display:flex;gap:6px;margin:6px 0;align-items:center}
+#dr .row input.n{width:82px;flex:none}
+#dr .row button{flex:none;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;border-radius:6px;padding:7px 10px;font-weight:700}
+#dr .add-btn{width:100%;margin-top:8px;padding:9px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:6px;font-weight:600;font-size:13px}
+#dr .done-btn{width:100%;margin-top:16px;padding:12px;background:#1d4ed8;color:#fff;border:0;border-radius:8px;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <div class="left">
+    <span class="badge-demo">Live Demo</span>
+    <span>Built for <strong id="bn">Your Company</strong></span>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-edit" onclick="openDr()">✏️ Edit Services &amp; Prices</button>
+    <button type="button" class="btn-buy" id="buy-btn" onclick="buy()">Add This to Our Website &rarr;</button>
+  </div>
+</div>
+
+<main>
+  <div id="app"></div>
+</main>
+
+<div id="dr-backdrop" onclick="closeDr()"></div>
+<div id="dr"></div>
+
+<script>
+/* ---------- Config ---------- */
+const STRIPE = 'https://buy.stripe.com/eVq6oIe9f6UcgZu46pbAs01';
+const API = 'https://uk-ai-agency.app.n8n.cloud/webhook';
+const SAVE_URL = API + '/iqe-save-config';
+const LEAD_URL = API + '/iqe-lead';
+const ID_RE = /^iqe_[a-z0-9]{16}$/;
+const BUY_LABEL = 'Add This to Our Website →';
+
+const URGENCY = ['Urgent (Next 7–14 days)', 'Within 1 month', 'Within 2–3 months', 'Just budgeting / comparing quotes'];
+
+const SZ_ROOMS = [['1 Room',1],['2-3 Rooms',2.2],['Full House',4.2]];
+const SZ_PROP = [['Terraced / Flat',1],['Semi-Detached',1.35],['Detached / Large',1.85]];
+
+const T = {
+  builder: {
+    l: 'Building & Construction',
+    q: '2. Property / project size',
+    o: [['Small / Single Room',1],['Standard 3-Bed Home',1.4],['Large Detached / Commercial',2.0]],
+    s: [['House Extension',28000,55000],['Loft Conversion',30000,52000],['Garage Conversion',12000,22000],['Structural Knock-Through',2500,6500],['Brickwork & Repointing',900,3200],['Full Refurbishment',22000,58000]]
+  },
+  driveways: {
+    l: 'Driveways & Landscaping',
+    q: '2. Area / driveway size',
+    o: [['1 Car / Small Patio',1],['2 Cars / Medium Garden',1.6],['3+ Cars / Large Area',2.3]],
+    s: [['Resin Bound Driveway',3200,6500],['Block Paving Driveway',3000,6800],['Porcelain / Indian Sandstone Patio',2400,5500],['Tarmac Driveway',2200,4800],['Turfing & Landscaping',1500,4200],['Fencing & Garden Walls',1100,3400]]
+  },
+  plumber: {
+    l: 'Plumbing & Heating',
+    q: '2. Property / heating size',
+    o: [['1 Bathroom (5-7 Rads)',1],['2 Bathrooms (8-11 Rads)',1.45],['3+ Bathrooms (12+ Rads)',2.0]],
+    s: [['New Combi Boiler Install',2100,3400],['Full Bathroom Refurbishment',4500,8500],['Central Heating & Radiators',2800,5200],['Boiler Service / Repair',120,380],['Underfloor Heating',2200,4800],['General Plumbing / Leaks',150,450]]
+  },
+  heating_engineer: {
+    l: 'Heating & Boilers',
+    q: '2. Property / heating size',
+    o: [['1 Bathroom (5-7 Rads)',1],['2 Bathrooms (8-11 Rads)',1.45],['3+ Bathrooms (12+ Rads)',2.0]],
+    s: [['New Boiler Installation',2200,3600],['Air Source Heat Pump',5500,9500],['Powerflush & Radiators',550,1400],['Boiler Servicing & Repair',110,350],['Underfloor Heating',2400,5000],['Smart Thermostat & Controls',220,480]]
+  },
+  electrician: {
+    l: 'Electrical Services',
+    q: '2. Property size',
+    o: [['1-2 Bed Flat / Terraced',1],['3 Bed Semi-Detached',1.35],['4+ Bed Detached / Commercial',1.85]],
+    s: [['Full / Partial Rewire',3200,6200],['Consumer Unit (Fuseboard)',550,950],['EV Charger Installation',850,1350],['EICR Safety Certificate',150,320],['Lighting & Extra Sockets',220,680],['Solar PV & Battery Storage',4800,8500]]
+  },
+  roofer: {
+    l: 'Roofing Services',
+    q: '2. Property / roof size',
+    o: SZ_PROP,
+    s: [['New Pitched Roof',5500,11500],['Flat Roof (GRP / EPDM)',1800,4200],['Roof Leak / Tile Repair',250,850],['Fascias, Soffits & Guttering',1200,2800],['Chimney Repointing / Removal',650,2200],['Velux / Roof Windows',950,2100]]
+  },
+  carpenter: {
+    l: 'Carpentry & Joinery',
+    q: '2. Scope of work',
+    o: [['Single Item / 1 Room',1],['2-4 Items / Multiple Rooms',1.8],['Full Property Package',3.2]],
+    s: [['Internal Doors Hanging',350,950],['Bespoke Fitted Wardrobes',1600,3800],['Kitchen Installation',2500,5500],['Skirting, Architrave & Flooring',600,1800],['Staircase Refurbishment',1400,3500],['Timber Decking & Pergolas',2200,5200]]
+  },
+  plasterer: {
+    l: 'Plastering & Rendering',
+    q: '2. Scope of work',
+    o: SZ_ROOMS,
+    s: [['Room Skimming / Re-skim',400,850],['Artex Ceiling Flatten',350,750],['Plasterboarding / Drylining',600,1400],['External Rendering (Silicone / K-Rend)',2800,6500],['Damp Proofing & Tanking',950,2600],['Patch & Wall Repairs',180,450]]
+  },
+  painter: {
+    l: 'Painting & Decorating',
+    q: '2. Scope of work',
+    o: SZ_ROOMS,
+    s: [['Interior Room Painting',380,800],['Full Interior Redecoration',1800,4200],['Exterior House Painting',1400,3500],['Wallpaper Hanging / Stripping',320,750],['Doors, Skirting & Woodwork',280,680],['Kitchen Cabinet Spraying',950,2200]]
+  },
+  tiler: {
+    l: 'Wall & Floor Tiling',
+    q: '2. Tiling area size',
+    o: [['Small Area (Under 10m²)',1],['Medium Room (10-25m²)',1.75],['Large Floor / Multiple Rooms (25m²+)',2.8]],
+    s: [['Full Bathroom Tiling',1100,2400],['Kitchen Floor Tiling',850,1900],['Kitchen Splashback Tiling',320,680],['Wetroom & Waterproofing',1400,3000],['Large Format / Porcelain Slabs',1300,2800],['Outdoor Patio Paving',1600,3800]]
+  },
+  hvac: {
+    l: 'Air Conditioning & HVAC',
+    q: '2. Rooms / zones to cover',
+    o: [['Single Room',1],['2-3 Rooms (Multi-Split)',2.1],['Full Property / Commercial',3.6]],
+    s: [['Home Wall Split AC Install',1450,2400],['Multi-Room Air Conditioning',2800,5200],['Air Source Heat Pump',5500,9800],['Commercial HVAC Installation',3500,8500],['AC Servicing & Regas',140,320],['Ventilation & Heat Recovery',1200,2900]]
+  },
+  glaziery: {
+    l: 'Windows, Doors & Glazing',
+    q: '2. Number of units / size',
+    o: [['Single Door or 1-2 Windows',1],['3-5 Windows / Medium Job',2.1],['Full House Windows & Doors',4.0]],
+    s: [['uPVC Casement Windows',900,2200],['Composite Front Door',1150,2100],['Aluminium Bi-Fold Doors',3200,6500],['French / Sliding Patio Doors',1600,3400],['Misted Double Glazing Repair',180,480],['Roof Lantern / Conservatory',2800,6800]]
+  }
+};
+
+/* ---------- Helpers ---------- */
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function clean(s, max) {
+  return (s == null ? '' : String(s)).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+function toPrice(v) {
+  const n = Math.round(Number(v) || 0);
+  return Math.max(0, Math.min(1000000, n));
+}
+function clampMult(v) {
+  return (isFinite(v) && v >= 0.5 && v <= 3) ? v : 1;
+}
+function normCity(c) {
+  const s = clean(c, 60);
+  const l = s.toLowerCase();
+  return (!s || l === 'your area' || l === 'uk') ? 'Local Area Estimate' : s;
+}
+function fmt(n) {
+  return '£' + (Math.round(n / 25) * 25).toLocaleString('en-GB');
+}
+function inFrame() {
+  try { return window.self !== window.top; } catch (e) { return true; }
+}
+function newId() {
+  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+  const a = new Uint8Array(16);
+  crypto.getRandomValues(a);
+  return 'iqe_' + Array.from(a, b => chars[b % 36]).join('');
+}
+function b64urlDecode(s) {
+  let b = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b.length % 4) b += '=';
+  const bin = atob(b);
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+// Sent as a form-encoded `payload` field so the browser makes a "simple" CORS request
+// (no preflight). n8n parses it into body.payload, which the Code node JSON-parses.
+async function postJSON(url, body, ms) {
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      body: new URLSearchParams({ payload: JSON.stringify(body) }),
+      keepalive: true,
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    return r.ok;
+  } catch (e) {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function resolveTradeKey(raw) {
+  const s = (raw || '').toString().toLowerCase().trim();
+  if (T[s]) return s;
+  if (s.includes('drive') || s.includes('paving') || s.includes('landscap')) return 'driveways';
+  if (s.includes('elec') || s.includes('rewir') || /\bev\b/.test(s)) return 'electrician';
+  if (s.includes('heat') || s.includes('boiler') || /\bgas\b/.test(s)) return 'heating_engineer';
+  if (s.includes('plumb') || s.includes('bath')) return 'plumber';
+  if (s.includes('roof') || s.includes('gutter') || s.includes('fascia')) return 'roofer';
+  if (s.includes('plast') || s.includes('render') || s.includes('skim')) return 'plasterer';
+  if (s.includes('paint') || s.includes('decorat')) return 'painter';
+  if (s.includes('tile') || s.includes('tiling')) return 'tiler';
+  if (s.includes('carp') || s.includes('joiner') || s.includes('kitchen')) return 'carpenter';
+  if (s.includes('hvac') || s.includes('air con') || s.includes('ventilat')) return 'hvac';
+  if (s.includes('glaz') || s.includes('window') || s.includes('door') || s.includes('upvc')) return 'glaziery';
+  return 'builder';
+}
+
+/* ---------- Service price matching (scraped service names → guide prices) ---------- */
+const STOP = new Set(['and','or','the','a','an','of','for','to','in','on','with','new','full','general','services','service','work','works','home','house','domestic','small','large','partial','local','specialist','specialists','professional']);
+function stem(w) {
+  return w.length > 4 ? w.replace(/(ings|ing|ers|er|ed|es|s|e)$/, '') : w.replace(/s$/, '');
+}
+const GENERIC = new Set(['install','installation','installer','installs','repair','repairs','fitting','fitted','fit','replacement','replace','supply'].map(stem));
+function tokens(str) {
+  return String(str).toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')
+    .filter(w => w && !STOP.has(w)).map(stem).filter(w => w.length >= 2);
+}
+function tokMatch(a, b) {
+  return a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
+}
+function matchScore(aToks, bToks) {
+  let score = 0;
+  aToks.forEach(t => {
+    if (bToks.some(u => tokMatch(t, u))) score += GENERIC.has(t) ? 0.25 : 1;
+  });
+  return score;
+}
+function findPrice(name, tradeKey) {
+  const nt = tokens(name);
+  const order = [tradeKey].concat(Object.keys(T).filter(k => k !== tradeKey));
+  let best = null, bestScore = 0;
+  order.forEach((k, ki) => T[k].s.forEach(sv => {
+    const sc = matchScore(nt, tokens(sv[0])) + (ki === 0 ? 0.1 : 0);
+    if (sc > bestScore) { bestScore = sc; best = sv; }
+  }));
+  return bestScore >= 1 ? best : null;
+}
+function tradeMedian(tradeKey) {
+  const s = T[tradeKey].s;
+  const mid = arr => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
+  return [mid(s.map(x => x[1])), mid(s.map(x => x[2]))];
+}
+
+/* ---------- Saved config from embed code (?cfg=base64url JSON) ---------- */
+function readCfg(raw) {
+  if (!raw || raw.length > 8000) return null;
+  try {
+    const c = JSON.parse(b64urlDecode(raw));
+    if (!c || typeof c !== 'object') return null;
+    const services = Array.isArray(c.s)
+      ? c.s.filter(x => Array.isArray(x) && clean(x[0], 80)).slice(0, 12).map(x => [clean(x[0], 80), toPrice(x[1]), toPrice(x[2])])
+      : [];
+    return { name: clean(c.n, 80), city: clean(c.c, 60), nicheKey: resolveTradeKey(c.k), services, mult: clampMult(Number(c.m)) };
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ---------- State ---------- */
+const params = new URLSearchParams(location.search);
+const isEmbed = params.get('embed') === '1' || inFrame();
+if (isEmbed) {
+  document.getElementById('bar').style.display = 'none';
+  document.body.classList.add('embed');
+}
+const cfg = readCfg(params.get('cfg'));
+const idParam = params.get('id') || '';
+
+const state = {
+  name: (cfg && cfg.name) || clean(params.get('name'), 80) || 'Your Company',
+  city: normCity(cfg ? cfg.city : params.get('city')),
+  nicheKey: cfg ? cfg.nicheKey : resolveTradeKey(params.get('niche') || 'builder'),
+  mult: cfg ? cfg.mult : clampMult(parseFloat(params.get('m'))),
+  selService: 0,
+  selSize: 1,
+  urgency: URGENCY[0],
+  services: [],
+  lead: { name: '', phone: '', pc: '', hp: '' },
+  errors: {},
+  showResult: false,
+  sendState: '',
+  leadSent: false,
+  configId: ID_RE.test(idParam) ? idParam : ''
+};
+
+if (cfg && cfg.services.length) {
+  state.services = cfg.services;
+} else {
+  const rawServices = params.get('services');
+  if (rawServices) {
+    const names = rawServices.split(',').map(x => clean(x, 80)).filter(Boolean).slice(0, 8);
+    if (names.length >= 2) {
+      const fallback = tradeMedian(state.nicheKey);
+      state.services = names.map(nm => {
+        const m = findPrice(nm, state.nicheKey);
+        return m ? [nm, m[1], m[2]] : [nm, fallback[0], fallback[1]];
+      });
+    }
+  }
+}
+if (!state.services.length) state.services = T[state.nicheKey].s.map(x => [...x]);
+
+function normaliseServices() {
+  state.services = state.services
+    .map(s => {
+      let lo = toPrice(s[1]), hi = toPrice(s[2]);
+      if (lo > hi) [lo, hi] = [hi, lo];
+      return [clean(s[0], 80), lo, hi];
+    })
+    .filter(s => s[0]);
+  if (!state.services.length) state.services = T[state.nicheKey].s.map(x => [...x]);
+}
+
+function currentEstimate() {
+  const trade = T[state.nicheKey];
+  const s = state.services[state.selService] || ['Service', 500, 1200];
+  const o = trade.o[state.selSize] || ['Standard', 1];
+  return { service: s[0], size: o[0], low: fmt(s[1] * o[1] * state.mult), high: fmt(s[2] * o[1] * state.mult) };
+}
+
+/* ---------- Render ---------- */
+function sendStatusHtml() {
+  const n = esc(state.name);
+  if (state.sendState === 'sending') return `Sending your details to ${n}…`;
+  if (state.sendState === 'sent') return `✓ Sent — ${n} will be in touch to arrange your free survey.`;
+  if (state.sendState === 'failed') return `We couldn't send your details just now.<button type="button" onclick="retryLead()">Try again</button>`;
+  return '';
+}
+function sendStatusClass() {
+  return { sending: 'wait', sent: 'ok', failed: 'fail' }[state.sendState] || '';
+}
+
+function render() {
+  document.getElementById('bn').textContent = state.name;
+  document.title = state.name + ' – Instant Quote Calculator';
+  const trade = T[state.nicheKey];
+  if (state.selService >= state.services.length) state.selService = 0;
+  if (state.selSize >= trade.o.length) state.selSize = 1;
+
+  const svButtons = state.services.map((s, i) =>
+    `<button type="button" class="opt ${i === state.selService ? 'on' : ''}" onclick="setService(${i})">${esc(s[0])}</button>`
+  ).join('');
+
+  const szButtons = trade.o.map((o, i) =>
+    `<button type="button" class="opt ${i === state.selSize ? 'on' : ''}" onclick="setSize(${i})">${esc(o[0])}</button>`
+  ).join('');
+
+  const urgencyOpts = URGENCY.map(u => `<option ${u === state.urgency ? 'selected' : ''}>${esc(u)}</option>`).join('');
+  const est = currentEstimate();
+  const e = state.errors;
+  const L = state.lead;
+  const n = esc(state.name);
+
+  document.getElementById('app').innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <span class="pill">${esc(normCity(state.city))}</span>
+        <h1>${n}</h1>
+        <p>Select your project details below for a 30-second instant estimate.</p>
+      </div>
+      <div class="card-body">
+        <div class="step-label">1. What ${esc(trade.l.toLowerCase().replace(/\s+services$/, ''))} service do you need?</div>
+        <div class="grid">${svButtons}</div>
+
+        <div class="step-label">${esc(trade.q)}</div>
+        <div class="grid">${szButtons}</div>
+
+        <div class="step-label">3. How soon are you looking to start?</div>
+        <select class="field" aria-label="How soon are you looking to start?" onchange="state.urgency=this.value">${urgencyOpts}</select>
+
+        <form class="inputs" onsubmit="return submitLead(event)" novalidate>
+          <input class="hp" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true" value="${esc(L.hp)}" oninput="state.lead.hp=this.value">
+          <input class="field ${e.name ? 'err' : ''}" id="lead-name" autocomplete="name" aria-label="Your full name" placeholder="Your Full Name" value="${esc(L.name)}" oninput="state.lead.name=this.value;clearErr('name',this)">
+          <div class="err-msg ${e.name ? 'show' : ''}">Please enter your name.</div>
+          <input class="field ${e.phone ? 'err' : ''}" id="lead-phone" type="tel" inputmode="tel" autocomplete="tel" aria-label="Mobile number" placeholder="Mobile Number" value="${esc(L.phone)}" oninput="state.lead.phone=this.value;clearErr('phone',this)">
+          <div class="err-msg ${e.phone ? 'show' : ''}">Please enter a valid UK phone number.</div>
+          <input class="field ${e.pc ? 'err' : ''}" id="lead-pc" autocomplete="postal-code" autocapitalize="characters" aria-label="Property postcode" placeholder="Property Postcode" value="${esc(L.pc)}" oninput="state.lead.pc=this.value;clearErr('pc',this)">
+          <div class="err-msg ${e.pc ? 'show' : ''}">Please enter a valid UK postcode.</div>
+          <button type="submit" class="cta">Calculate My Instant Estimate &rarr;</button>
+          <p class="consent">By continuing, you agree to ${n} contacting you about this estimate. Your details are only shared with ${n}.</p>
+        </form>
+
+        <div class="result-box ${state.showResult ? 'show' : ''}" id="res-box">
+          <div class="est-label">Estimated Project Guide Price</div>
+          <div class="est-price">${est.low} – ${est.high}</div>
+          <p class="est-sub">Estimate for <strong>${esc(est.service)}</strong> (${esc(est.size)}) with <strong>${n}</strong>. Subject to a free site survey.</p>
+          <p class="send-status ${sendStatusClass()}" id="send-status">${sendStatusHtml()}</p>
+          ${isEmbed ? '' : `<p class="demo-note"><strong>Demo preview:</strong> on your website, this enquiry (name, number, postcode and job) is emailed straight to you the moment a homeowner submits it.</p>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function updateSendStatus() {
+  const el = document.getElementById('send-status');
+  if (!el) return render();
+  el.className = 'send-status ' + sendStatusClass();
+  el.innerHTML = sendStatusHtml();
+}
+
+/* ---------- Homeowner actions ---------- */
+function normPhone(raw) {
+  let d = String(raw || '').replace(/[^\d+]/g, '');
+  if (d.startsWith('+44')) d = '0' + d.slice(3);
+  else if (d.startsWith('0044')) d = '0' + d.slice(4);
+  else if (d.startsWith('44') && d.length === 12) d = '0' + d.slice(2);
+  d = d.replace(/\+/g, '');
+  return /^0\d{9,10}$/.test(d) ? d : '';
+}
+function normPostcode(raw) {
+  const p = String(raw || '').toUpperCase().replace(/\s+/g, '');
+  return /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(p) ? p.slice(0, -3) + ' ' + p.slice(-3) : '';
+}
+
+window.clearErr = function(field, el) {
+  if (!state.errors[field]) return;
+  state.errors[field] = false;
+  el.classList.remove('err');
+  const msg = el.nextElementSibling;
+  if (msg && msg.classList.contains('err-msg')) msg.classList.remove('show');
+};
+
+window.setService = function(i) {
+  state.selService = i;
+  render();
+};
+
+window.setSize = function(i) {
+  state.selSize = i;
+  render();
+};
+
+window.submitLead = function(ev) {
+  if (ev) ev.preventDefault();
+  const L = state.lead;
+  const phone = normPhone(L.phone);
+  const pc = normPostcode(L.pc);
+  state.errors = { name: clean(L.name, 80).length < 2, phone: !phone, pc: !pc };
+  if (state.errors.name || state.errors.phone || state.errors.pc) {
+    render();
+    const first = document.querySelector('input.field.err');
+    if (first) first.focus();
+    return false;
+  }
+  L.pc = pc;
+  state.showResult = true;
+  render();
+  const box = document.getElementById('res-box');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (isEmbed && state.configId && !state.leadSent && state.sendState !== 'sending') sendLead();
+  return false;
+};
+
+async function sendLead() {
+  const est = currentEstimate();
+  const payload = {
+    configId: state.configId,
+    name: clean(state.lead.name, 80),
+    phone: normPhone(state.lead.phone),
+    postcode: normPostcode(state.lead.pc),
+    service: clean(est.service, 80),
+    size: clean(est.size, 80),
+    urgency: state.urgency,
+    estimate: est.low + ' – ' + est.high,
+    page: clean(document.referrer, 300),
+    hp: state.lead.hp
+  };
+  state.sendState = 'sending';
+  updateSendStatus();
+  const ok = await postJSON(LEAD_URL, payload, 8000) || await postJSON(LEAD_URL, payload, 8000);
+  state.sendState = ok ? 'sent' : 'failed';
+  if (ok) state.leadSent = true;
+  updateSendStatus();
+}
+
+window.retryLead = function() {
+  if (state.sendState !== 'sending') sendLead();
+};
+
+/* ---------- Drawer (contractor customisation) ---------- */
+window.openDr = function() {
+  const rows = state.services.map((s, i) => `
+    <div class="row">
+      <input value="${esc(s[0])}" aria-label="Service name" oninput="state.services[${i}][0]=this.value">
+      <input class="n" type="number" min="0" step="50" value="${toPrice(s[1])}" oninput="state.services[${i}][1]=Number(this.value)||0" title="Min £" aria-label="Minimum price in pounds">
+      <input class="n" type="number" min="0" step="50" value="${toPrice(s[2])}" oninput="state.services[${i}][2]=Number(this.value)||0" title="Max £" aria-label="Maximum price in pounds">
+      <button type="button" onclick="removeSvc(${i})" aria-label="Remove service">&times;</button>
+    </div>
+  `).join('');
+
+  const tradeOpts = Object.keys(T).map(k =>
+    `<option value="${k}" ${k === state.nicheKey ? 'selected' : ''}>${esc(T[k].l)}</option>`
+  ).join('');
+
+  document.getElementById('dr').innerHTML = `
+    <div class="top">
+      <h3>Customise Your Calculator</h3>
+      <button type="button" onclick="closeDr()" style="border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:4px 10px">Close</button>
+    </div>
+    <label>Company Name</label>
+    <input value="${esc(state.name)}" oninput="state.name=this.value;render()">
+
+    <label>City / Coverage Badge</label>
+    <input value="${esc(state.city)}" oninput="state.city=this.value;render()">
+
+    <label>Trade Category</label>
+    <select class="field" style="margin-bottom:4px" onchange="changeTrade(this.value)">${tradeOpts}</select>
+
+    <label>Your Services &amp; Guide Prices (Min £ / Max £)</label>
+    <div>${rows}</div>
+    <button type="button" class="add-btn" onclick="addSvc()">+ Add Another Service</button>
+    <button type="button" class="done-btn" onclick="closeDr()">Save &amp; Preview Live</button>
+  `;
+  document.getElementById('dr-backdrop').style.display = 'block';
+  document.getElementById('dr').style.display = 'block';
+};
+
+window.closeDr = function() {
+  document.getElementById('dr-backdrop').style.display = 'none';
+  document.getElementById('dr').style.display = 'none';
+  normaliseServices();
+  render();
+};
+
+window.changeTrade = function(k) {
+  if (!T[k]) return;
+  state.nicheKey = k;
+  state.services = T[k].s.map(x => [...x]);
+  state.selService = 0;
+  state.selSize = 1;
+  openDr();
+  render();
+};
+
+window.removeSvc = function(i) {
+  if (state.services.length <= 1) return;
+  state.services.splice(i, 1);
+  openDr();
+  render();
+};
+
+window.addSvc = function() {
+  if (state.services.length >= 12) return;
+  state.services.push(['New Service', 500, 1500]);
+  openDr();
+  render();
+};
+
+/* ---------- Checkout: save config, then pay with a Stripe-safe reference ---------- */
+let buying = false;
+window.buy = async function() {
+  if (buying) return;
+  buying = true;
+  const btn = document.getElementById('buy-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving your setup…'; }
+
+  normaliseServices();
+  if (!state.configId) state.configId = newId();
+  const payload = {
+    configId: state.configId,
+    name: clean(state.name, 80) || 'Your Company',
+    city: normCity(state.city),
+    niche: state.nicheKey,
+    mult: state.mult,
+    services: state.services.slice(0, 12),
+    source: location.href.slice(0, 500)
+  };
+  // Retry once. If both fail we still continue to Stripe: n8n sends a holding
+  // email and the owner BCC flags it for manual setup.
+  await postJSON(SAVE_URL, payload, 6000) || await postJSON(SAVE_URL, payload, 6000);
+  window.location.href = STRIPE + '?client_reference_id=' + state.configId;
+};
+
+// Reset the button if the visitor comes back from Stripe with the browser's Back button.
+window.addEventListener('pageshow', () => {
+  buying = false;
+  const btn = document.getElementById('buy-btn');
+  if (btn) { btn.disabled = false; btn.textContent = BUY_LABEL; }
+});
+
+/* ---------- Auto-height when embedded ---------- */
+if (isEmbed && window.parent !== window) {
+  const postHeight = () => {
+    try {
+      const h = Math.ceil(document.body.getBoundingClientRect().height) + 4;
+      window.parent.postMessage({ type: 'iqe:height', id: state.configId, height: h }, '*');
+    } catch (e) {}
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(postHeight).observe(document.body);
+  window.addEventListener('load', postHeight);
+}
+
+render();
+</script>
+</body>
+</html>
